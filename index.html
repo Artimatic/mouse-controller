@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Input Controller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #080810;
+    --surface: #10101e;
+    --surface2: #181828;
+    --border: #2a2a45;
+    --accent: #7c5cfc;
+    --accent2: #fc5c8a;
+    --accent3: #5cfccc;
+    --text: #e8e8f8;
+    --text-dim: #6e6e9a;
+    --success: #5cfccc;
+    --error: #fc5c5c;
+    --warn: #fccc5c;
+    --r: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+  }
+
+  /* Animated bg grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .titlebar {
+    -webkit-app-region: drag;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    background: rgba(8,8,16,0.9);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  .titlebar-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-left: 8px;
+  }
+
+  .titlebar-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-r { background: #fc5c5c; }
+  .dot-y { background: #fccc5c; }
+  .dot-g { background: #5cfc8a; }
+
+  .layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+  }
+
+  .panel {
+    background: rgba(16,16,30,0.85);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel:last-child { border-right: none; border-left: 1px solid var(--border); }
+
+  .panel-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .panel-header .icon { font-size: 14px; }
+
+  .panel-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* Custom scrollbar */
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .tab-content .panel-body { min-height: 0; }
+
+  /* Center canvas area */
+  .canvas-area {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .canvas-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .canvas-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .pos-badge {
+    font-size: 11px;
+    color: var(--accent3);
+    background: rgba(92,252,204,0.08);
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(92,252,204,0.2);
+    letter-spacing: 0.05em;
+  }
+
+  #screen-canvas {
+    flex: 1;
+    cursor: crosshair;
+    display: block;
+    background: var(--surface);
+    position: relative;
+  }
+
+  /* ─── Form Elements ─── */
+
+  label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  input[type="number"], input[type="text"], textarea, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  textarea { resize: vertical; min-height: 60px; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+  .field { display: flex; flex-direction: column; }
+
+  /* ─── Buttons ─── */
+
+  btn, .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .btn:hover::after { opacity: 0.07; }
+  .btn:active::after { opacity: 0.15; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #5c3ccc);
+    color: white;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .btn-danger {
+    background: linear-gradient(135deg, #cc2a4a, #8a1a30);
+    color: white;
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, #1a8a6a, #0a5a44);
+    color: var(--success);
+  }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+
+  /* ─── Sections ─── */
+
+  .section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* ─── Slider ─── */
+
+  .slider-row { display: flex; align-items: center; gap: 8px; }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(124,92,252,0.6);
+  }
+
+  .slider-val {
+    font-size: 11px;
+    color: var(--accent3);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* ─── Key chips ─── */
+
+  .key-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .key-chip {
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-dim);
+  }
+
+  .key-chip:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(124,92,252,0.1);
+  }
+
+  .key-chip.selected {
+    border-color: var(--accent);
+    background: rgba(124,92,252,0.2);
+    color: var(--accent);
+  }
+
+  /* ─── Log ─── */
+
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  #log::-webkit-scrollbar { width: 3px; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry {
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border-left: 2px solid transparent;
+    letter-spacing: 0.02em;
+    animation: slideIn 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-ok   { border-color: var(--success); background: rgba(92,252,204,0.05); color: var(--success); }
+  .log-err  { border-color: var(--error);   background: rgba(252,92,92,0.05);  color: var(--error); }
+  .log-info { border-color: var(--accent);  background: rgba(124,92,252,0.05); color: var(--text-dim); }
+  .log-warn { border-color: var(--warn);    background: rgba(252,204,92,0.05); color: var(--warn); }
+
+  .log-time { color: var(--text-dim); margin-right: 6px; }
+
+  /* ─── Macro list ─── */
+
+  .macro-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    animation: slideIn 0.2s ease;
+  }
+
+  .macro-step .step-type {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .type-click  { background: rgba(124,92,252,0.2); color: var(--accent); }
+  .type-move   { background: rgba(92,252,204,0.2); color: var(--accent3); }
+  .type-type   { background: rgba(252,92,138,0.2); color: var(--accent2); }
+  .type-wait   { background: rgba(252,204,92,0.2); color: var(--warn); }
+
+  .macro-step .step-detail { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step-copy { cursor: pointer; color: var(--text-dim); font-size: 12px; line-height: 1; padding: 0 4px; flex-shrink: 0; }
+  .step-copy:hover { color: var(--accent3); }
+  .step-del { cursor: pointer; color: var(--text-dim); font-size: 14px; line-height: 1; padding: 0 2px; flex-shrink: 0; }
+  .step-del:hover { color: var(--error); }
+
+  .macro-step.editing {
+    background: rgba(124,92,252,0.15);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px rgba(124,92,252,0.3);
+  }
+
+  /* ─── Tabs ─── */
+
+  .tabs { display: flex; gap: 2px; padding: 8px 8px 0; }
+
+  .tab {
+    padding: 6px 12px;
+    border-radius: 6px 6px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: var(--text-dim);
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .tab-content { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
+  .tab-content.active { display: flex; }
+  .tab-content.active .panel-body { overflow-y: auto; }
+
+  /* ─── Canvas crosshair ─── */
+
+.canvas-wrap { flex: 1; position: relative; overflow: auto; }
+
+#screen-canvas { position: relative; width: auto; height: auto; display: block; }
+
+  .crosshair-x, .crosshair-y {
+    position: absolute;
+    background: rgba(124,92,252,0.35);
+    pointer-events: none;
+    transition: none;
+  }
+  .crosshair-x { top: 0; bottom: 0; width: 1px; }
+  .crosshair-y { left: 0; right: 0; height: 1px; }
+
+  .coord-tooltip {
+    position: absolute;
+    background: rgba(16,16,30,0.9);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
+    color: var(--accent3);
+    pointer-events: none;
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+    transform: translate(10px, -50%);
+  }
+
+  .click-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent2);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: dotPop 0.8s ease forwards;
+  }
+
+  @keyframes dotPop {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    50% { transform: translate(-50%, -50%) scale(2.5); opacity: 0.7; }
+    100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+  }
+
+  .canvas-grid-label {
+    position: absolute;
+    font-size: 9px;
+    color: var(--border);
+    pointer-events: none;
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── Status bar ─── */
+
+  .statusbar {
+    height: 26px;
+    background: rgba(8,8,16,0.9);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 20px;
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  .status-item { display: flex; align-items: center; gap: 5px; }
+  .status-dot { width: 5px; height: 5px; border-radius: 50%; }
+  .dot-ready { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .dot-busy  { background: var(--warn); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ─── Speed display ─── */
+
+  .speed-display {
+    font-size: 18px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    color: var(--accent);
+    text-align: center;
+  }
+
+  /* ─── Tag for click mode ─── */
+  .mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s;
+  }
+
+  .mode-l { background: rgba(124,92,252,0.15); border-color: rgba(124,92,252,0.4); color: var(--accent); }
+  .mode-r { background: rgba(252,92,138,0.15); border-color: rgba(252,92,138,0.4); color: var(--accent2); }
+  .mode-d { background: rgba(92,252,204,0.15); border-color: rgba(92,252,204,0.4); color: var(--accent3); }
+
+  .modes { display: flex; gap: 4px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="titlebar-dot dot-r"></div>
+  <div class="titlebar-dot dot-y"></div>
+  <div class="titlebar-dot dot-g"></div>
+  <span class="titlebar-title">⌨ Input Controller</span>
+</div>
+
+<div class="layout">
+
+  <!-- LEFT PANEL: Mouse -->
+  <div class="panel">
+    <div class="panel-header"><span class="icon">🖱</span> Mouse</div>
+    <div class="panel-body">
+
+      <div class="section">
+        <div class="section-title">Click Mode</div>
+        <div class="modes">
+          <span class="mode-badge mode-l active-mode" id="mode-left"   onclick="setMode('left')">Left</span>
+          <span class="mode-badge mode-r" id="mode-right"  onclick="setMode('right')">Right</span>
+          <span class="mode-badge mode-d" id="mode-double" onclick="setMode('double')">Double</span>
+        </div>
+        <div style="font-size:10px; color:var(--text-dim)">Enter X/Y values manually before executing</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Move / Click</div>
+        <div class="row">
+          <div class="field"><label>X</label><input type="number" id="mx" value="500" min="0" /></div>
+          <div class="field"><label>Y</label><input type="number" id="my" value="400" min="0" /></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Repeat</label><input type="number" id="action-repeat" value="1" min="1" /></div>
+          <div class="field"><label>Interval (ms)</label><input type="number" id="action-interval" value="1000" min="0" step="100" /></div>
+        </div>
+        <div style="font-size:10px; color:var(--text-dim)">Repeat action n times with interval in ms (default 1000ms)</div>
+        <button class="btn btn-secondary btn-sm" onclick="doMove()">▶ Move Only</button>
+        <button class="btn btn-primary" onclick="doClick()">⊙ Execute Click</button>
+        <button class="btn btn-secondary btn-sm" onclick="saveMoveToChain()">💾 Save Move to Chain</button>
+        <button class="btn btn-secondary btn-sm" onclick="saveClickToChain()">💾 Save Click to Chain</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Drag</div>
+        <div class="row">
+          <div class="field"><label>From X</label><input type="number" id="drag-fx" value="200" /></div>
+          <div class="field"><label>From Y</label><input type="number" id="drag-fy" value="200" /></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>To X</label><input type="number" id="drag-tx" value="600" /></div>
+          <div class="field"><label>To Y</label><input type="number" id="drag-ty" value="400" /></div>
+        </div>
+        <button class="btn btn-secondary" onclick="doDrag()">↔ Execute Drag</button>
+        <button class="btn btn-secondary btn-sm" onclick="saveDragToChain()">💾 Save Drag to Chain</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Scroll</div>
+        <div class="row">
+          <div class="field"><label>X</label><input type="number" id="scx" value="500" /></div>
+          <div class="field"><label>Y</label><input type="number" id="scy" value="400" /></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Direction</label>
+            <select id="scroll-dir"><option value="down">Down ↓</option><option value="up">Up ↑</option></select>
+          </div>
+          <div class="field"><label>Amount</label><input type="number" id="scroll-amt" value="3" min="1" max="20" /></div>
+        </div>
+        <button class="btn btn-secondary" onclick="doScroll()">⟳ Execute Scroll</button>
+        <button class="btn btn-secondary btn-sm" onclick="saveScrollToChain()">💾 Save Scroll to Chain</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Speed</div>
+        <div class="speed-display" id="speed-val">500</div>
+        <div class="slider-row">
+          <span style="font-size:10px;color:var(--text-dim)">Slow</span>
+          <input type="range" id="speed-slider" min="100" max="2000" value="500" oninput="updateSpeed(this.value)" />
+          <span style="font-size:10px;color:var(--text-dim)">Fast</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Keyboard + Macro + Log -->
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('keyboard')">⌨ Keys</div>
+      <div class="tab" onclick="switchTab('macro')">⚡ Macro</div>
+      <div class="tab" onclick="switchTab('log')">📋 Log</div>
+    </div>
+
+    <!-- Keyboard Tab -->
+    <div class="tab-content active" id="tab-keyboard">
+      <div class="panel-header"><span class="icon">⌨</span> Keyboard</div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="section-title">Type Text</div>
+          <textarea id="type-text" placeholder="Enter text to type..."></textarea>
+          <button class="btn btn-primary" onclick="doType()">⌨ Type It</button>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Special Keys</div>
+          <div class="key-grid" id="key-grid"></div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="clearSelectedKeys()">Clear Selection</button>
+          <button class="btn btn-primary" onclick="doPressKeys()">⌨ Press Selected Keys</button>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Hotkey Combo</div>
+          <div class="row">
+            <div class="field">
+              <label>Modifier</label>
+              <select id="hk-mod">
+                <option value="">None</option>
+                <option value="Control">Ctrl</option>
+                <option value="Alt">Alt</option>
+                <option value="Shift">Shift</option>
+                <option value="Meta">⌘/Win</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Key</label>
+              <input type="text" id="hk-key" placeholder="e.g. c" maxlength="2" />
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="doHotkey()">⚡ Send Hotkey</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Macro Tab -->
+    <div class="tab-content" id="tab-macro">
+      <div class="panel-header"><span class="icon">⚡</span> Macro Builder</div>
+      <div class="panel-body">
+        <div class="section">
+          <div class="section-title">Add Step</div>
+          <div class="field">
+            <label>Step Type</label>
+            <select id="macro-type" onchange="updateMacroFields()">
+              <option value="click">Click</option>
+              <option value="move">Move</option>
+              <option value="drag">Drag</option>
+              <option value="scroll">Scroll</option>
+              <option value="type">Type</option>
+              <option value="wait">Wait</option>
+            </select>
+          </div>
+          <div id="macro-fields"></div>
+          <div class="field">
+            <label>Delay before (ms)</label>
+            <input type="number" id="macro-delay" value="200" min="0" step="50" />
+          </div>
+          <button class="btn btn-secondary" onclick="addMacroStep()">＋ Add Step</button>
+          <button class="btn btn-primary" id="save-edit-btn" style="display:none" onclick="saveMacroStepEdit()">✓ Save Edit</button>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Export Current Macro</div>
+          <button class="btn btn-secondary btn-sm" style="width:100%" onclick="showMacrosJson()">📋 Export Steps</button>
+          <textarea id="macros-json-display" style="width:100%; height:150px; margin-top:8px; padding:8px; background:var(--surface); color:var(--accent3); border:1px solid var(--border); border-radius:4px; font-family:'JetBrains Mono'; font-size:10px; resize:vertical; display:none" readonly></textarea>
+          <button class="btn btn-primary btn-sm" id="copy-json-btn" style="width:100%; margin-top:6px; display:none" onclick="copyMacrosJson()">📋 Copy JSON</button>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Import JSON</div>
+          <button class="btn btn-secondary btn-sm" style="width:100%" onclick="showLoadJson()">📥 Load JSON</button>
+          <textarea id="macros-json-load" style="width:100%; height:150px; margin-top:8px; padding:8px; background:var(--surface); color:var(--accent3); border:1px solid var(--border); border-radius:4px; font-family:'JetBrains Mono'; font-size:10px; resize:vertical; display:none" placeholder="Paste macro steps array or named macros object..."></textarea>
+          <button class="btn btn-primary btn-sm" id="load-json-btn" style="width:100%; margin-top:6px; display:none" onclick="loadMacrosFromJson()">📥 Load Macros</button>
+        </div>
+
+        <div class="section">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+            <div class="section-title">Steps (<span id="step-count">0</span>)</div>
+            <button class="btn btn-secondary btn-sm" style="width:auto; padding:3px 8px" onclick="clearMacro()">Clear</button>
+          </div>
+          <div id="macro-steps" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:4px"></div>
+          <div class="row" style="margin-top:8px">
+            <div class="field">
+              <label>Repeat</label>
+              <input type="number" id="macro-repeat" value="1" min="1" max="100" />
+            </div>
+          </div>
+          <button class="btn btn-success" onclick="runMacro()">▶ Run Macro</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Tab -->
+    <div class="tab-content" id="tab-log">
+      <div class="panel-header" style="justify-content:space-between">
+        <span><span class="icon">📋</span> Activity Log</span>
+        <button class="btn btn-secondary btn-sm" style="width:auto; padding:3px 8px" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="panel-body" id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="status-item">
+    <div class="status-dot dot-ready" id="status-dot"></div>
+    <span id="status-text">Ready</span>
+  </div>
+  <div class="status-item">
+    <span style="color:var(--text-dim)">pos</span>
+    <span id="status-pos" style="color:var(--accent3)">—</span>
+  </div>
+  <div class="status-item">
+    <span style="color:var(--text-dim)">mode</span>
+    <span id="status-mode" style="color:var(--accent)">left-click</span>
+  </div>
+  <div class="status-item" style="margin-left:auto">
+    <span style="color:var(--text-dim)">nut.js v4</span>
+  </div>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let clickMode = 'left';
+let selectedKeys = new Set();
+let macroSteps = [];
+let busy = false;
+let screenWidth = 1920; // default
+let screenHeight = 1080;
+let scaleX = 1;
+let scaleY = 1;
+let screenImage = null;
+let editingStepIndex = -1;
+
+const SPECIAL_KEYS = [
+  'Enter','Space','Tab','Escape','Backspace','Delete',
+  'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+  'Control','Alt','Shift','Meta',
+  'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
+  'Home','End','PageUp','PageDown',
+  'a','b','c','d','e','f','g','h','i','j','k','l','m',
+  'n','o','p','q','r','s','t','u','v','w','x','y','z',
+];
+
+// ─── Canvas Setup ─────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('screen-canvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+
+async function initCanvasToScreen() {
+  const size = await window.nutjs.getScreenSize();
+  screenWidth = size.width;
+  screenHeight = size.height;
+  canvas.width = screenWidth;
+  canvas.height = screenHeight;
+  canvas.style.width = screenWidth + 'px';
+  canvas.style.height = screenHeight + 'px';
+  scaleX = 1;
+  scaleY = 1;
+  drawCanvas();
+}
+
+function resizeCanvas() {
+  // Keep full-screen canvas size static; only redraw when the window changes.
+  if (canvas.width && canvas.height) {
+    drawCanvas();
+    return;
+  }
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  scaleX = screenWidth / canvas.width;
+  scaleY = screenHeight / canvas.height;
+  drawCanvas();
+}
+
+function drawCanvas() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  if (screenImage) {
+    // Draw the screen image scaled to fit canvas
+    ctx.drawImage(screenImage, 0, 0, W, H);
+  } else {
+    // Draw grid
+    ctx.strokeStyle = 'rgba(42,42,69,0.5)';
+    ctx.lineWidth = 1;
+    const step = 60;
+    for (let x = 0; x < W; x += step) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y < H; y += step) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // Labels
+    ctx.fillStyle = 'rgba(42,42,69,0.9)';
+    ctx.font = '9px JetBrains Mono, monospace';
+    for (let x = step; x < W; x += step*2) {
+      ctx.fillText(x, x + 2, 11);
+    }
+    for (let y = step; y < H; y += step*2) {
+      ctx.fillText(y, 2, y - 2);
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(124,92,252,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+
+    // Center dot
+    ctx.fillStyle = 'rgba(124,92,252,0.4)';
+    ctx.beginPath(); ctx.arc(W/2, H/2, 3, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+window.addEventListener('resize', resizeCanvas);
+initCanvasToScreen();
+
+// ─── Canvas Interactions ──────────────────────────────────────────────────────
+
+async function captureScreen() {
+  try {
+    // Get screen size
+    const size = await window.nutjs.getScreenSize();
+    screenWidth = size.width;
+    screenHeight = size.height;
+    scaleX = screenWidth / canvas.width;
+    scaleY = screenHeight / canvas.height;
+
+    // Get screen sources with large thumbnail
+    const sources = await window.electronAPI.getDesktopSources({
+      types: ['screen'],
+      thumbnailSize: { width: screenWidth, height: screenHeight }
+    });
+
+    if (sources.length > 0) {
+      const source = sources[0]; // Assume first screen
+      screenImage = new Image();
+      screenImage.onload = () => {
+        drawCanvas();
+      };
+      screenImage.src = source.thumbnail.toDataURL();
+    }
+  } catch (err) {
+    console.error('Failed to capture screen:', err);
+    alert('Screen capture failed: ' + err.message);
+  }
+}
+
+function showGrid() {
+  screenImage = null;
+  scaleX = 1;
+  scaleY = 1;
+  drawCanvas();
+}
+
+const cxX = document.getElementById('cx-x');
+const cxY = document.getElementById('cx-y');
+const coordTip = document.getElementById('coord-tip');
+const posBadge = document.getElementById('pos-badge');
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+
+  cxX.style.left = cx + 'px';
+  cxY.style.top  = cy + 'px';
+
+  const sx = Math.round(cx * scaleX);
+  const sy = Math.round(cy * scaleY);
+
+  coordTip.style.display = 'block';
+  coordTip.style.left = cx + 'px';
+  coordTip.style.top  = cy + 'px';
+  coordTip.textContent = `x:${sx}  y:${sy}`;
+
+  posBadge.textContent = `x: ${sx}   y: ${sy}`;
+  document.getElementById('status-pos').textContent = `${sx}, ${sy}`;
+});
+
+canvas.addEventListener('mouseleave', () => {
+  cxX.style.left = '-1px';
+  cxY.style.top  = '-1px';
+  coordTip.style.display = 'none';
+});
+
+canvas.addEventListener('click', (e) => {
+  e.preventDefault();
+
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left;
+  const cy = e.clientY - rect.top;
+  const sx = Math.round(cx * scaleX);
+  const sy = Math.round(cy * scaleY);
+
+  document.getElementById('mx').value = sx;
+  document.getElementById('my').value = sy;
+  posBadge.textContent = `x: ${sx}   y: ${sy}`;
+  document.getElementById('status-pos').textContent = `${sx}, ${sy}`;
+});
+
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+});
+
+
+// ─── Mode ─────────────────────────────────────────────────────────────────────
+
+function setMode(mode) {
+  clickMode = mode;
+  ['left','right','double'].forEach(m => {
+    document.getElementById('mode-' + m).style.opacity = m === mode ? '1' : '0.45';
+  });
+  document.getElementById('status-mode').textContent =
+    mode === 'left' ? 'left-click' : mode === 'right' ? 'right-click' : 'double-click';
+}
+
+// ─── Mouse Actions ────────────────────────────────────────────────────────────
+
+async function setBusy(b) {
+  busy = b;
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + (b ? 'dot-busy' : 'dot-ready');
+  txt.textContent = b ? 'Executing...' : 'Ready';
+}
+
+async function executeClick(x, y, forceMode) {
+  const mode = forceMode || clickMode;
+  let res;
+  try {
+    if (mode === 'double') {
+      res = await window.nutjs.mouseDoubleClick({ x, y });
+      addLog(`Double-click → (${x}, ${y})`, res.success ? 'ok' : 'err');
+    } else {
+      res = await window.nutjs.mouseClick({ x, y, button: mode });
+      addLog(`${mode}-click → (${x}, ${y})`, res.success ? 'ok' : 'err');
+    }
+    if (!res.success) addLog('Error: ' + res.error, 'err');
+  } catch(e) { addLog('Fatal: ' + e.message, 'err'); }
+}
+
+function getActionRepeatSettings() {
+  const repeat = Math.max(1, +document.getElementById('action-repeat').value || 1);
+  const interval = Math.max(0, +document.getElementById('action-interval').value || 1000);
+  return { repeat, interval };
+}
+
+async function repeatAction(action, repeat, interval) {
+  for (let i = 0; i < repeat; i++) {
+    await action();
+    if (i < repeat - 1) await new Promise(resolve => setTimeout(resolve, interval));
+  }
+}
+
+async function doMove() {
+  const x = +document.getElementById('mx').value;
+  const y = +document.getElementById('my').value;
+  const { repeat, interval } = getActionRepeatSettings();
+  setBusy(true);
+  await repeatAction(async () => {
+    const res = await window.nutjs.mouseMove({ x, y });
+    addLog(`Move → (${x}, ${y})`, res.success ? 'ok' : 'err');
+    if (!res.success) addLog(res.error, 'err');
+  }, repeat, interval);
+  setBusy(false);
+}
+
+async function doClick() {
+  const x = +document.getElementById('mx').value;
+  const y = +document.getElementById('my').value;
+  const { repeat, interval } = getActionRepeatSettings();
+  setBusy(true);
+  await repeatAction(async () => await executeClick(x, y), repeat, interval);
+  setBusy(false);
+}
+
+async function doDrag() {
+  const fromX = +document.getElementById('drag-fx').value;
+  const fromY = +document.getElementById('drag-fy').value;
+  const toX   = +document.getElementById('drag-tx').value;
+  const toY   = +document.getElementById('drag-ty').value;
+  const { repeat, interval } = getActionRepeatSettings();
+  setBusy(true);
+  await repeatAction(async () => {
+    const res = await window.nutjs.mouseDrag({ fromX, fromY, toX, toY });
+    addLog(`Drag (${fromX},${fromY}) → (${toX},${toY})`, res.success ? 'ok' : 'err');
+    if (!res.success) addLog(res.error, 'err');
+  }, repeat, interval);
+  setBusy(false);
+}
+
+async function doScroll() {
+  const x   = +document.getElementById('scx').value;
+  const y   = +document.getElementById('scy').value;
+  const dir = document.getElementById('scroll-dir').value;
+  const amt = +document.getElementById('scroll-amt').value;
+  const { repeat, interval } = getActionRepeatSettings();
+  setBusy(true);
+  await repeatAction(async () => {
+    const res = await window.nutjs.mouseScroll({ x, y, direction: dir, amount: amt });
+    addLog(`Scroll ${dir} ×${amt} at (${x},${y})`, res.success ? 'ok' : 'err');
+    if (!res.success) addLog(res.error, 'err');
+  }, repeat, interval);
+  setBusy(false);
+}
+
+async function saveMoveToChain() {
+  const x = +document.getElementById('mx').value;
+  const y = +document.getElementById('my').value;
+  macroSteps.push({ type: 'move', x, y, delay: 0 });
+  renderMacroSteps();
+  addLog('Move saved to chain', 'info');
+}
+
+async function saveClickToChain() {
+  const x = +document.getElementById('mx').value;
+  const y = +document.getElementById('my').value;
+  const button = clickMode === 'double' ? 'double' : clickMode;
+  macroSteps.push({ type: 'click', x, y, button, delay: 0 });
+  renderMacroSteps();
+  addLog('Click saved to chain', 'info');
+}
+
+async function saveDragToChain() {
+  const fromX = +document.getElementById('drag-fx').value;
+  const fromY = +document.getElementById('drag-fy').value;
+  const toX   = +document.getElementById('drag-tx').value;
+  const toY   = +document.getElementById('drag-ty').value;
+  macroSteps.push({ type: 'drag', fromX, fromY, toX, toY, delay: 0 });
+  renderMacroSteps();
+  addLog('Drag saved to chain', 'info');
+}
+
+async function saveScrollToChain() {
+  const x   = +document.getElementById('scx').value;
+  const y   = +document.getElementById('scy').value;
+  const direction = document.getElementById('scroll-dir').value;
+  const amount = +document.getElementById('scroll-amt').value;
+  macroSteps.push({ type: 'scroll', x, y, direction, amount, delay: 0 });
+  renderMacroSteps();
+  addLog('Scroll saved to chain', 'info');
+}
+
+async function updateSpeed(v) {
+  document.getElementById('speed-val').textContent = v;
+  await window.nutjs.setMouseSpeed({ speed: +v });
+  addLog(`Mouse speed → ${v}`, 'info');
+}
+
+async function showMacrosJson() {
+  const textarea = document.getElementById('macros-json-display');
+  const copyBtn = document.getElementById('copy-json-btn');
+  
+  // Show current macro steps as JSON
+  textarea.value = JSON.stringify(macroSteps, null, 2);
+  textarea.style.display = 'block';
+  copyBtn.style.display = 'block';
+  
+  addLog(`✓ Current macro steps exported (${macroSteps.length} steps)`, 'ok');
+}
+
+function copyMacrosJson() {
+  const textarea = document.getElementById('macros-json-display');
+  if (!textarea.value) {
+    addLog('No JSON to copy', 'warn');
+    return;
+  }
+  
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    addLog('✓ JSON copied to clipboard', 'ok');
+  }).catch(err => {
+    addLog(`Failed to copy JSON: ${err.message}`, 'err');
+  });
+}
+
+function showLoadJson() {
+  const textarea = document.getElementById('macros-json-load');
+  const loadBtn = document.getElementById('load-json-btn');
+  const isVisible = textarea.style.display === 'block';
+  
+  if (isVisible) {
+    textarea.style.display = 'none';
+    loadBtn.style.display = 'none';
+  } else {
+    textarea.style.display = 'block';
+    loadBtn.style.display = 'block';
+    textarea.focus();
+  }
+}
+
+async function loadMacrosFromJson() {
+  const textarea = document.getElementById('macros-json-load');
+  const json = textarea.value.trim();
+  
+  if (!json) {
+    addLog('No JSON to load', 'warn');
+    return;
+  }
+  
+  try {
+    const data = JSON.parse(json);
+    
+    // Check if it's an array of steps (load into current macro)
+    if (Array.isArray(data)) {
+      macroSteps = data;
+      renderMacroSteps();
+      textarea.value = '';
+      showLoadJson(); // Hide the textarea
+      addLog(`✓ Loaded ${data.length} steps into current macro`, 'ok');
+      return;
+    }
+    
+    // Otherwise, treat as named macros object and save to file
+    if (!window.electronAPI || !window.electronAPI.loadMacrosJson) {
+      addLog('ERROR: loadMacrosJson API not available', 'err');
+      return;
+    }
+    
+    const res = await window.electronAPI.loadMacrosJson({ json });
+    if (res.success) {
+      textarea.value = '';
+      showLoadJson(); // Hide the textarea
+      addLog('✓ Macros loaded from JSON', 'ok');
+    } else {
+      addLog(`Failed to load macros: ${res.error}`, 'err');
+    }
+  } catch (err) {
+    addLog(`Failed to parse JSON: ${err.message}`, 'err');
+  }
+}
+
+
+// ─── Keyboard Actions ─────────────────────────────────────────────────────────
+
+function buildKeyGrid() {
+  const grid = document.getElementById('key-grid');
+  SPECIAL_KEYS.forEach(k => {
+    const chip = document.createElement('div');
+    chip.className = 'key-chip';
+    chip.textContent = k;
+    chip.dataset.key = k;
+    chip.onclick = () => toggleKey(k, chip);
+    grid.appendChild(chip);
+  });
+}
+
+function toggleKey(k, chip) {
+  if (selectedKeys.has(k)) { selectedKeys.delete(k); chip.classList.remove('selected'); }
+  else { selectedKeys.add(k); chip.classList.add('selected'); }
+}
+
+function clearSelectedKeys() {
+  selectedKeys.clear();
+  document.querySelectorAll('.key-chip.selected').forEach(c => c.classList.remove('selected'));
+}
+
+async function doType() {
+  const text = document.getElementById('type-text').value;
+  if (!text) return;
+  setBusy(true);
+  const res = await window.nutjs.keyboardType({ text });
+  addLog(`Type: "${text.substring(0,30)}${text.length>30?'…':''}"`, res.success ? 'ok' : 'err');
+  if (!res.success) addLog(res.error, 'err');
+  setBusy(false);
+}
+
+async function doPressKeys() {
+  const keys = [...selectedKeys];
+  if (!keys.length) { addLog('No keys selected', 'warn'); return; }
+  setBusy(true);
+  const res = await window.nutjs.keyboardKey({ keys });
+  addLog(`Keys: [${keys.join(' + ')}]`, res.success ? 'ok' : 'err');
+  if (!res.success) addLog(res.error, 'err');
+  setBusy(false);
+}
+
+async function doHotkey() {
+  const mod = document.getElementById('hk-mod').value;
+  const key = document.getElementById('hk-key').value.trim();
+  if (!key) { addLog('Enter a key', 'warn'); return; }
+  const keys = mod ? [mod, key] : [key];
+  setBusy(true);
+  const res = await window.nutjs.keyboardKey({ keys });
+  addLog(`Hotkey: ${mod ? mod+'+' : ''}${key}`, res.success ? 'ok' : 'err');
+  if (!res.success) addLog(res.error, 'err');
+  setBusy(false);
+}
+
+// ─── Macro Builder ────────────────────────────────────────────────────────────
+
+function updateMacroFields() {
+  const type = document.getElementById('macro-type').value;
+  const container = document.getElementById('macro-fields');
+  const templates = {
+    click: `<div class="row" style="margin-bottom:6px">
+              <div class="field"><label>X</label><input type="number" id="mf-x" value="${document.getElementById('mx').value}" /></div>
+              <div class="field"><label>Y</label><input type="number" id="mf-y" value="${document.getElementById('my').value}" /></div>
+            </div>
+            <div class="field" style="margin-bottom:6px">
+              <label>Button</label>
+              <select id="mf-btn"><option value="left">Left</option><option value="right">Right</option><option value="double">Double</option></select>
+            </div>`,
+    move:  `<div class="row" style="margin-bottom:6px">
+              <div class="field"><label>X</label><input type="number" id="mf-x" value="${document.getElementById('mx').value}" /></div>
+              <div class="field"><label>Y</label><input type="number" id="mf-y" value="${document.getElementById('my').value}" /></div>
+            </div>`,
+    drag:  `<div class="row" style="margin-bottom:6px">
+              <div class="field"><label>From X</label><input type="number" id="mf-fx" value="${document.getElementById('drag-fx').value}" /></div>
+              <div class="field"><label>From Y</label><input type="number" id="mf-fy" value="${document.getElementById('drag-fy').value}" /></div>
+            </div>
+            <div class="row" style="margin-bottom:6px">
+              <div class="field"><label>To X</label><input type="number" id="mf-tx" value="${document.getElementById('drag-tx').value}" /></div>
+              <div class="field"><label>To Y</label><input type="number" id="mf-ty" value="${document.getElementById('drag-ty').value}" /></div>
+            </div>`,
+    scroll:`<div class="row" style="margin-bottom:6px">
+              <div class="field"><label>X</label><input type="number" id="mf-x" value="${document.getElementById('scx').value}" /></div>
+              <div class="field"><label>Y</label><input type="number" id="mf-y" value="${document.getElementById('scy').value}" /></div>
+            </div>
+            <div class="row" style="margin-bottom:6px">
+              <div class="field">
+                <label>Direction</label>
+                <select id="mf-dir"><option value="down">Down</option><option value="up">Up</option></select>
+              </div>
+              <div class="field"><label>Amount</label><input type="number" id="mf-amt" value="${document.getElementById('scroll-amt').value}" min="1" max="20" /></div>
+            </div>`,
+    type:  `<div class="field" style="margin-bottom:6px"><label>Text</label><textarea id="mf-text" style="min-height:40px" placeholder="Text to type..."></textarea></div>`,
+    wait:  `<div class="field" style="margin-bottom:6px"><label>Duration (ms)</label><input type="number" id="mf-ms" value="500" min="0" step="100" /></div>`,
+  };
+  container.innerHTML = templates[type] || '';
+}
+
+async function addMacroStep() {
+  const type  = document.getElementById('macro-type').value;
+  const delay = +document.getElementById('macro-delay').value || 0;
+  let step = { type, delay };
+
+  if (type === 'click') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+    step.button = document.getElementById('mf-btn').value;
+  } else if (type === 'move') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+  } else if (type === 'drag') {
+    step.fromX = +document.getElementById('mf-fx').value;
+    step.fromY = +document.getElementById('mf-fy').value;
+    step.toX = +document.getElementById('mf-tx').value;
+    step.toY = +document.getElementById('mf-ty').value;
+  } else if (type === 'scroll') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+    step.direction = document.getElementById('mf-dir').value;
+    step.amount = +document.getElementById('mf-amt').value;
+  } else if (type === 'type') {
+    step.text = document.getElementById('mf-text').value;
+  } else if (type === 'wait') {
+    step.ms = +document.getElementById('mf-ms').value;
+  }
+
+  macroSteps.push(step);
+  renderMacroSteps();
+}
+
+function renderMacroSteps() {
+  const container = document.getElementById('macro-steps');
+  container.innerHTML = '';
+  document.getElementById('step-count').textContent = macroSteps.length;
+
+  macroSteps.forEach((step, i) => {
+    const el = document.createElement('div');
+    el.className = 'macro-step' + (editingStepIndex === i ? ' editing' : '');
+    el.style.cursor = 'pointer';
+    el.onclick = (e) => { if (e.target.className !== 'step-del') editMacroStep(i); };
+
+    let detail = '';
+    if (step.type === 'click') detail = `(${step.x}, ${step.y}) ${step.button}`;
+    else if (step.type === 'move') detail = `(${step.x}, ${step.y})`;
+    else if (step.type === 'drag') detail = `(${step.fromX},${step.fromY}) → (${step.toX},${step.toY})`;
+    else if (step.type === 'scroll') detail = `${step.direction} ×${step.amount} at (${step.x},${step.y})`;
+    else if (step.type === 'type') detail = `"${step.text.substring(0,20)}"`;
+    else if (step.type === 'wait') detail = `${step.ms}ms`;
+    if (step.delay) detail += `  +${step.delay}ms`;
+
+    el.innerHTML = `<span class="step-type type-${step.type}">${step.type}</span>
+                    <span class="step-detail">${detail}</span>
+                    <span class="step-copy" onclick="copyMacroStep(${i})" title="Copy step">📋</span>
+                    <span class="step-del" onclick="removeMacroStep(${i})">✕</span>`;
+    container.appendChild(el);
+  });
+}
+
+async function removeMacroStep(i) {
+  macroSteps.splice(i, 1);
+  editingStepIndex = -1;
+  renderMacroSteps();
+}
+
+async function copyMacroStep(i) {
+  const step = macroSteps[i];
+  const newStep = JSON.parse(JSON.stringify(step));
+  macroSteps.push(newStep);
+  renderMacroSteps();
+  addLog(`Step copied to end of chain`, 'ok');
+}
+
+async function editMacroStep(i) {
+  editingStepIndex = editingStepIndex === i ? -1 : i;
+  if (editingStepIndex === -1) {
+    document.getElementById('save-edit-btn').style.display = 'none';
+    document.getElementById('save-edit-btn').parentElement.querySelector('.btn-secondary').style.display = 'block';
+    renderMacroSteps();
+    return;
+  }
+
+  const step = macroSteps[i];
+  document.getElementById('macro-type').value = step.type;
+  updateMacroFields();
+
+  document.getElementById('save-edit-btn').style.display = 'block';
+  document.getElementById('save-edit-btn').parentElement.querySelector('.btn-secondary').style.display = 'none';
+
+  setTimeout(() => {
+    if (step.type === 'click') {
+      document.getElementById('mf-x').value = step.x;
+      document.getElementById('mf-y').value = step.y;
+      document.getElementById('mf-btn').value = step.button;
+    } else if (step.type === 'move') {
+      document.getElementById('mf-x').value = step.x;
+      document.getElementById('mf-y').value = step.y;
+    } else if (step.type === 'drag') {
+      document.getElementById('mf-fx').value = step.fromX;
+      document.getElementById('mf-fy').value = step.fromY;
+      document.getElementById('mf-tx').value = step.toX;
+      document.getElementById('mf-ty').value = step.toY;
+    } else if (step.type === 'scroll') {
+      document.getElementById('mf-x').value = step.x;
+      document.getElementById('mf-y').value = step.y;
+      document.getElementById('mf-dir').value = step.direction;
+      document.getElementById('mf-amt').value = step.amount;
+    } else if (step.type === 'type') {
+      document.getElementById('mf-text').value = step.text;
+    } else if (step.type === 'wait') {
+      document.getElementById('mf-ms').value = step.ms;
+    }
+    document.getElementById('macro-delay').value = step.delay || 0;
+  }, 0);
+
+  renderMacroSteps();
+}
+
+async function saveMacroStepEdit() {
+  if (editingStepIndex === -1) return;
+
+  const type = document.getElementById('macro-type').value;
+  const delay = +document.getElementById('macro-delay').value || 0;
+  let step = { type, delay };
+
+  if (type === 'click') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+    step.button = document.getElementById('mf-btn').value;
+  } else if (type === 'move') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+  } else if (type === 'drag') {
+    step.fromX = +document.getElementById('mf-fx').value;
+    step.fromY = +document.getElementById('mf-fy').value;
+    step.toX = +document.getElementById('mf-tx').value;
+    step.toY = +document.getElementById('mf-ty').value;
+  } else if (type === 'scroll') {
+    step.x = +document.getElementById('mf-x').value;
+    step.y = +document.getElementById('mf-y').value;
+    step.direction = document.getElementById('mf-dir').value;
+    step.amount = +document.getElementById('mf-amt').value;
+  } else if (type === 'type') {
+    step.text = document.getElementById('mf-text').value;
+  } else if (type === 'wait') {
+    step.ms = +document.getElementById('mf-ms').value;
+  }
+
+  macroSteps[editingStepIndex] = step;
+  editingStepIndex = -1;
+  document.getElementById('save-edit-btn').style.display = 'none';
+  document.getElementById('save-edit-btn').parentElement.querySelector('.btn-secondary').style.display = 'block';
+  renderMacroSteps();
+  addLog('✓ Macro step updated', 'ok');
+}
+
+async function clearMacro() { macroSteps = []; editingStepIndex = -1; renderMacroSteps(); }
+
+async function runMacro() {
+  if (!macroSteps.length) { addLog('Macro is empty', 'warn'); return; }
+  const repeat = +document.getElementById('macro-repeat').value || 1;
+  setBusy(true);
+  addLog(`Running macro: ${macroSteps.length} steps × ${repeat}`, 'info');
+
+  for (let r = 0; r < repeat; r++) {
+    const res = await window.nutjs.runMacro({ steps: macroSteps });
+    if (res.success) {
+      const failed = res.results.filter(s => !s.success).length;
+      addLog(`Run ${r+1}: ${res.results.length - failed}/${res.results.length} steps ok`, failed ? 'warn' : 'ok');
+    } else {
+      addLog(`Run ${r+1} failed: ${res.error}`, 'err');
+    }
+  }
+  setBusy(false);
+}
+
+// ─── Log ──────────────────────────────────────────────────────────────────────
+
+function addLog(msg, type = 'info') {
+  const log = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = `log-entry log-${type}`;
+  const t = new Date().toLocaleTimeString('en', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  entry.innerHTML = `<span class="log-time">${t}</span>${msg}`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+
+  // Keep max 200 entries
+  while (log.children.length > 200) log.removeChild(log.firstChild);
+}
+
+function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const names = ['keyboard', 'macro', 'log'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'tab-' + name);
+  });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    buildKeyGrid();
+    updateMacroFields();
+    setMode('left');
+    
+    if (!window.electronAPI) {
+      console.error('electronAPI not available');
+      addLog('ERROR: electronAPI not available', 'err');
+      return;
+    }
+    
+    addLog('Input Controller ready — click canvas to send mouse events', 'info');
+    addLog('Tip: hover canvas to preview coordinates before clicking', 'info');
+  } catch (err) {
+    console.error('Initialization error:', err);
+    addLog(`Initialization error: ${err.message}`, 'err');
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "mouse-keyboard-controller",
+  "version": "1.0.0",
+  "description": "Desktop app to control mouse and keyboard using nut.js",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.1",
+    "electron": "^28.0.0"
+  }
+}

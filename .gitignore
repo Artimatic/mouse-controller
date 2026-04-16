@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# JSON files (except package files)
+*.json
+!package.json
+!package-lock.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Build outputs
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
