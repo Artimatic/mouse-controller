@@ -53,6 +53,7 @@ ipcMain.handle('mouse-click', async (_event, { x, y, button }) => {
   try {
     const { mouse, straightTo, Point, Button } = require('@nut-tree-fork/nut-js');
     const btn = button === 'right' ? Button.RIGHT : button === 'middle' ? Button.MIDDLE : Button.LEFT;
+    await new Promise(r => setTimeout(r, 5000));
     await mouse.move(straightTo(new Point(x, y)));
     await mouse.click(btn);
     return { success: true };
@@ -64,6 +65,7 @@ ipcMain.handle('mouse-click', async (_event, { x, y, button }) => {
 ipcMain.handle('mouse-double-click', async (_event, { x, y }) => {
   try {
     const { mouse, straightTo, Point, Button } = require('@nut-tree-fork/nut-js');
+    await new Promise(r => setTimeout(r, 5000));
     await mouse.move(straightTo(new Point(x, y)));
     await mouse.doubleClick(Button.LEFT);
     return { success: true };
@@ -246,7 +248,7 @@ ipcMain.handle('get-desktop-sources', async (_event, opts) => {
 ipcMain.handle('run-macro', async (_event, { steps }) => {
   const results = [];
   for (const step of steps) {
-    const delay = step.delay || 0;
+    const delay = step.type === 'click' ? (step.delay != null ? step.delay : 5000) : (step.delay || 0);
     if (delay > 0) await new Promise(r => setTimeout(r, delay));
 
     try {
