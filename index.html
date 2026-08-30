@@ -691,6 +691,7 @@
             </div>
           </div>
           <button class="btn btn-secondary" onclick="doHotkey()">⚡ Send Hotkey</button>
+          <button class="btn btn-secondary btn-sm" style="margin-left:8px" onclick="saveHotkeyToChain()">💾 Save Hotkey to Chain</button>
         </div>
       </div>
     </div>
@@ -1254,6 +1255,16 @@ async function doHotkey() {
   setBusy(false);
 }
 
+async function saveHotkeyToChain() {
+  const mod = document.getElementById('hk-mod').value;
+  const key = document.getElementById('hk-key').value.trim();
+  if (!key) { addLog('Enter a key', 'warn'); return; }
+  const keys = mod ? [mod, key] : [key];
+  macroSteps.push({ type: 'hotkey', keys, delay: 0 });
+  renderMacroSteps();
+  addLog('Hotkey saved to chain', 'info');
+}
+
 // ─── Macro Builder ────────────────────────────────────────────────────────────
 
 function updateMacroFields() {
@@ -1346,6 +1357,7 @@ function renderMacroSteps() {
     else if (step.type === 'drag') detail = `(${step.fromX},${step.fromY}) → (${step.toX},${step.toY})`;
     else if (step.type === 'scroll') detail = `${step.direction} ×${step.amount} at (${step.x},${step.y})`;
     else if (step.type === 'type') detail = `"${step.text.substring(0,20)}"`;
+    else if (step.type === 'hotkey') detail = step.keys ? step.keys.join(' + ') : '';
     else if (step.type === 'wait') detail = `${step.ms}ms`;
     if (step.delay) detail += `  +${step.delay}ms`;
 
